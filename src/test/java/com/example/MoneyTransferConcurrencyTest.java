@@ -1,11 +1,11 @@
 package com.example;
 
-import com.example.dto.MoneyTransferDto;
+import com.example.dto.MoneyTransferRequest;
 import com.example.entity.Account;
 import com.example.entity.Customer;
 import com.example.repository.AccountRepository;
 import com.example.repository.CustomerRepository;
-import com.example.service.AccountingService;
+import com.example.service.AccountService;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MoneyTransferConcurrencyTest {
 
     @Autowired
-    private AccountingService accountingService;
+    private AccountService accountService;
 
     @Autowired
     private AccountRepository accountRepository;
@@ -65,11 +65,8 @@ class MoneyTransferConcurrencyTest {
             IntStream.range(0, transfers).forEach(i ->
                     executor.submit(() -> {
                         try {
-                            MoneyTransferDto dto = new MoneyTransferDto();
-                            dto.setFromAccount(fromId.toString());
-                            dto.setToAccount(toId.toString());
-                            dto.setAmount("1");
-                            accountingService.moneyTransfer(dto);
+                            MoneyTransferRequest dto = new MoneyTransferRequest(fromId, toId, BigDecimal.ONE);
+                            accountService.moneyTransfer(dto);
                         } catch (Exception e) {
                             log.error(e.getMessage());
                         } finally {

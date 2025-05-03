@@ -1,15 +1,16 @@
 package com.example.service;
 
-import com.example.dto.AccountInfoDto;
-import com.example.dto.CreateAccountDto;
-import com.example.dto.MoneyTransferDto;
+import com.example.dto.AccountInfoResponse;
+import com.example.dto.CreateAccountRequest;
+import com.example.dto.CreateCustomerRequest;
+import com.example.dto.MoneyTransferRequest;
 import com.example.entity.Account;
 import com.example.entity.Customer;
 import com.example.repository.AccountRepository;
 import com.example.repository.CustomerRepository;
-import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -22,7 +23,10 @@ import java.util.stream.Stream;
 
 @Service
 @RequiredArgsConstructor
-public class AccountingService {
+//TODO(AccountService) +
+public class AccountService {
+    //TODO (В компоненты подтягиваем зависимости через конструктор, ты сам это на одном из собесов подсвечивал) ?
+    // RequiredArgsConstructor генерирует конструктор включающий только final поля. так что мой способ - через конструктор, но неявный
     private final AccountRepository accountRepository;
     private final CustomerRepository customerRepository;
 
@@ -30,25 +34,29 @@ public class AccountingService {
      * Создание нового клиента.
      * @return uuid нового созданного клиента.
      */
-    public UUID createCustomer() {
-        return customerRepository.save(new Customer()).getId();
+    public UUID createCustomer(CreateCustomerRequest createAccountRequest) {
+        var customer = new Customer();
+        customer.setName(createAccountRequest.name());
+        return customerRepository.save(customer).getId();
     }
 
     /**
-     *
-     * @param createAccountDto содержит uuid клиента, валюту счета, изначальную сумму.
+     * @param createAccountRequest содержит uuid клиента, валюту счета, изначальную сумму.
      * @return uuid нового созданного счета.
      */
-    public UUID createAccount(CreateAccountDto createAccountDto) {
-        UUID customerId = UUID.fromString(createAccountDto.getCustomerId());
+    //TODO(Это странно возвращать id на создание объекта в данном случае, на мой взгляд лучше объект) ?
+    // по идее, id это единственное, что неизвестно до создания объекта
+    public UUID createAccount(CreateAccountRequest createAccountRequest) {
+        UUID customerId = createAccountRequest.customerId();
         if (!customerRepository.existsById(customerId)) {
             throw new IllegalArgumentException("Клиент для добавления счета не существует");
         }
 
         var account = new Account();
-        account.setCurrency(createAccountDto.getCurrency());
-        account.setBalance(Optional.ofNullable(createAccountDto.getBalance())
-                .map(BigDecimal::new).filter(x -> x.compareTo(BigDecimal.ZERO) > -1)
+        account.setName(createAccountRequest.name());
+        account.setCurrency(createAccountRequest.currency());
+        account.setBalance(Optional.ofNullable(createAccountRequest.balance())
+                .filter(x -> x.compareTo(BigDecimal.ZERO) > -1)
                 .orElseThrow(() -> new IllegalArgumentException("Некорректное значение суммы")));
         var customer = new Customer();
         customer.setId(customerId);
@@ -60,17 +68,28 @@ public class AccountingService {
      * Перевод средств между счетами клиента.
      * @param moneyTransferDto содержит uuid счета отправления, получения, сумму перевода.
      */
+    //TODO(Сюда можно ебнуть уровень изоляции RepeatableRead - для понтов) ???
+    // с RepeatableRead не проходит тест MoneyTransferConcurrencyTest
+
+    /**
+     * TODO(Ебать)
+     * 1) Тяжело читаемая логика ?
+     * а как тогда упростить?
+     * 2) Много повторяющегося кода +
+     * разве что счет отправителя/получателя, а больше сокращать нечего
+     * 3) Про блокировки потом подумаю, тяжело так читать
+     */
+
     @Transactional
-    public void moneyTransfer(MoneyTransferDto moneyTransferDto) {
-        Account from = Optional.ofNullable(moneyTransferDto.getFromAccount())
-                .map(UUID::fromString).flatMap(accountRepository::findByIdForUpdate)
-                .orElseThrow(() -> new IllegalArgumentException("Не найден счет отправителя"));
-        Account to = Optional.ofNullable(moneyTransferDto.getToAccount())
-                .map(UUID::fromString).flatMap(accountRepository::findByIdForUpdate)
-                .orElseThrow(() -> new IllegalArgumentException("Не найден счет получателя"));
-        BigDecimal amount = Optional.ofNullable(moneyTransferDto.getAmount())
-                .map(BigDecimal::new).filter(x -> x.compareTo(BigDecimal.ZERO) > -1)
+    public void moneyTransfer(MoneyTransferRequest moneyTransferRequest) {
+
+        Account from = findAccountById(moneyTransferRequest.fromAccount(), "Не найден счет отправителя");
+        Account to = findAccountById(moneyTransferRequest.toAccount(), "Не найден счет получателя");
+
+        BigDecimal amount = Optional.ofNullable(moneyTransferRequest.amount())
+                .filter(x -> x.compareTo(BigDecimal.ZERO) > -1)
                 .orElseThrow(() -> new IllegalArgumentException("Некорректное значение суммы"));
+
         if (from.getId().equals(to.getId())) {
             throw new IllegalStateException("Нельзя перевести со счета на этот же самый счет");
         }
@@ -85,6 +104,10 @@ public class AccountingService {
         }
 
         // Вариант, полагающийся на пессимистичную блокировку уровня БД
+
+        //TODO(Нет обработки ошибок от бд) ?+
+        // я не знаю, как нормально это сделать. сейчас если у меня что-то пойдет по пизде, то транзакция откатится,
+        // а пользователь получит 500. думаешь, этого мало?
 
         from.setBalance(from.getBalance().subtract(amount));
         to.setBalance(to.getBalance().add(amount));
@@ -105,28 +128,39 @@ public class AccountingService {
 
     }
 
+    private Account findAccountById(UUID id, String errorMessage) {
+        return Optional.ofNullable(id).flatMap(accountRepository::findByIdForUpdate)
+                .orElseThrow(() -> new IllegalArgumentException(errorMessage));
+    }
+
     /**
      * @param customerId uuid клиента.
      * @return список данных о счетах клиента.
      */
-    public List<AccountInfoDto> getAccountsInfo(UUID customerId) {
+    public List<AccountInfoResponse> getAccountsInfo(UUID customerId) {
         if (!customerRepository.existsById(customerId)) {
             throw new IllegalArgumentException("Клиент с таким id не существует");
         }
-        return accountRepository.findByCustomerId(customerId).stream().map(AccountInfoDto::new).toList();
+        return accountRepository.findByCustomerId(customerId).stream().map(AccountInfoResponse::new).toList();
     }
 
     private final ConcurrentMap<UUID, ReentrantLock> lockRegistry = new ConcurrentHashMap<>();
 
+    /**
+     * Чтобы избежать дедлока — блокировать в порядке возрастания UUID
+     */
     private void lockAccounts(UUID id1, UUID id2) {
-        // чтобы избежать дедлока — блокировать в порядке возрастания UUID
+        //TODO(комменты в маленьких методах - в виде доки) +
+
         List<UUID> ordered = Stream.of(id1, id2).sorted().toList();
         lockRegistry.computeIfAbsent(ordered.get(0), k -> new ReentrantLock()).lock();
         lockRegistry.computeIfAbsent(ordered.get(1), k -> new ReentrantLock()).lock();
     }
 
+    /**
+     * Разблокирование в обратном порядке
+     */
     private void unlockAccounts(UUID id1, UUID id2) {
-        // разблокирование в обратном порядке
         List<UUID> ordered = Stream.of(id1, id2).sorted().toList();
         lockRegistry.get(ordered.get(1)).unlock();
         lockRegistry.get(ordered.get(0)).unlock();

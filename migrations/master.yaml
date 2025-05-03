@@ -1,0 +1,7 @@
+databaseChangeLog:
+  - changeSet:
+      id: create-tables
+      author: vf
+      changes:
+        - sqlFile:
+            path: sql/init.sql

@@ -16,6 +16,9 @@ public class Customer {
     @Column(name = "id", nullable = false, updatable = false)
     private UUID id;
 
+    @Column(name = "name")
+    private String name;
+
     @OneToMany(mappedBy = "customer", fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     private List<Account> accounts = new ArrayList<>();
 }

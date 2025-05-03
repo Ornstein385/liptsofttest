@@ -21,6 +21,9 @@ public class Account {
     @Column(name = "balance", precision = 24, scale = 2)
     private BigDecimal balance = BigDecimal.ZERO;
 
+    @Column(name = "name")
+    private String name;
+
     @ManyToOne(fetch = FetchType.LAZY)
     private Customer customer;
 }

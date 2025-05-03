@@ -1,11 +1,11 @@
 package com.example;
 
-import com.example.dto.MoneyTransferDto;
+import com.example.dto.MoneyTransferRequest;
 import com.example.entity.Account;
 import com.example.entity.Customer;
 import com.example.repository.AccountRepository;
 import com.example.repository.CustomerRepository;
-import com.example.service.AccountingService;
+import com.example.service.AccountService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 public class MoneyTransferLogicTest {
 
     @Autowired
-    private AccountingService accountingService;
+    private AccountService accountService;
 
     @Autowired
     private CustomerRepository customerRepository;
@@ -55,12 +55,9 @@ public class MoneyTransferLogicTest {
      */
     @Test
     void testSameAccountTransferThrows() {
-        MoneyTransferDto dto = new MoneyTransferDto();
-        dto.setFromAccount(from.getId().toString());
-        dto.setToAccount(from.getId().toString());
-        dto.setAmount("1");
+        MoneyTransferRequest dto = new MoneyTransferRequest(from.getId(), from.getId(), BigDecimal.ONE);
 
-        assertThatThrownBy(() -> accountingService.moneyTransfer(dto))
+        assertThatThrownBy(() -> accountService.moneyTransfer(dto))
                 .isInstanceOf(IllegalStateException.class);
     }
 
@@ -77,12 +74,9 @@ public class MoneyTransferLogicTest {
         foreignAccount.setBalance(new BigDecimal("100"));
         foreignAccount = accountRepository.save(foreignAccount);
 
-        MoneyTransferDto dto = new MoneyTransferDto();
-        dto.setFromAccount(from.getId().toString());
-        dto.setToAccount(foreignAccount.getId().toString());
-        dto.setAmount("1");
+        MoneyTransferRequest dto = new MoneyTransferRequest(from.getId(), foreignAccount.getId(), BigDecimal.ONE);
 
-        assertThatThrownBy(() -> accountingService.moneyTransfer(dto))
+        assertThatThrownBy(() -> accountService.moneyTransfer(dto))
                 .isInstanceOf(IllegalStateException.class);
     }
 
@@ -94,12 +88,9 @@ public class MoneyTransferLogicTest {
         to.setCurrency("USD");
         accountRepository.save(to);
 
-        MoneyTransferDto dto = new MoneyTransferDto();
-        dto.setFromAccount(from.getId().toString());
-        dto.setToAccount(to.getId().toString());
-        dto.setAmount("1");
+        MoneyTransferRequest dto = new MoneyTransferRequest(from.getId(), to.getId(), BigDecimal.ONE);
 
-        assertThatThrownBy(() -> accountingService.moneyTransfer(dto))
+        assertThatThrownBy(() -> accountService.moneyTransfer(dto))
                 .isInstanceOf(IllegalStateException.class);
     }
 
@@ -108,12 +99,9 @@ public class MoneyTransferLogicTest {
      */
     @Test
     void testInsufficientFundsThrows() {
-        MoneyTransferDto dto = new MoneyTransferDto();
-        dto.setFromAccount(from.getId().toString());
-        dto.setToAccount(to.getId().toString());
-        dto.setAmount("1000");
+        MoneyTransferRequest dto = new MoneyTransferRequest(from.getId(), to.getId(), new BigDecimal("1000"));
 
-        assertThatThrownBy(() -> accountingService.moneyTransfer(dto))
+        assertThatThrownBy(() -> accountService.moneyTransfer(dto))
                 .isInstanceOf(IllegalStateException.class);
     }
 }
