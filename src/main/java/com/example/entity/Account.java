@@ -1,12 +1,16 @@
 package com.example.entity;
 
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.util.UUID;
 
 @Data
+@NoArgsConstructor
+@AllArgsConstructor
 @Entity
 @Table(name = "account", indexes = {@Index(name = "idx_account_customer_id", columnList = "customer_id")})
 public class Account {
