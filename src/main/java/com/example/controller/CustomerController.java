@@ -1,7 +1,6 @@
 package com.example.controller;
 
 import com.example.dto.request.CreateCustomerRequest;
-import com.example.service.AccountService;
 import com.example.service.CustomerService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
